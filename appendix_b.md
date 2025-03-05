@@ -1,427 +1,296 @@
-# Appendix B: Algebraic Structures Support
+# Appendix B: Algebraic Structures Support (PowerShell Version)
 
-In this appendix, you'll find some basic JavaScript implementations of various algebraic
+In this appendix, you'll find some basic PowerShell implementations of various algebraic
 structures described in the book. Keep in mind that these implementations may not be the fastest or the
-most efficient implementation out there; they *solely serve an educational purpose*.
+most efficient out there; they *solely serve an educational purpose*.
 
-In order to find structures that are more production-ready, have a peek at [folktale](http://folktale.origamitower.com/)
-or [fantasy-land](https://github.com/fantasyland).
-
-Note that some methods also refer to functions defined in the [Appendix A](./appendix_a.md)
+Some methods also refer to functions defined in [Appendix A](./appendix_a.md).
 
 ## Compose
 
-```js
-const createCompose = curry((F, G) => class Compose {
-  constructor(x) {
-    this.$value = x;
-  }
-
-  [util.inspect.custom]() {
-    return `Compose(${inspect(this.$value)})`;
-  }
-
-  // ----- Pointed (Compose F G)
-  static of(x) {
-    return new Compose(F(G(x)));
-  }
-
-  // ----- Functor (Compose F G)
-  map(fn) {
-    return new Compose(this.$value.map(x => x.map(fn)));
-  }
-
-  // ----- Applicative (Compose F G)
-  ap(f) {
-    return f.map(this.$value);
-  }
-});
+```powershell
+# Emulating Compose by combining two functions F and G.
+function New-Compose {
+    param(
+        [ScriptBlock]$F,
+        [ScriptBlock]$G,
+        $x
+    )
+    $value = & $F (& $G $x)
+    return [PSCustomObject]@{
+        Value = $value
+        Map = {
+            param($fn)
+            # Map transforms the inner value.
+            New-Compose -F $F -G $G -x (& $fn $this.Value)
+        }
+        Ap = {
+            param($applyObj)
+            # Ap applies a function contained in another structure.
+            $newVal = ($applyObj.Value | ForEach-Object { $_($this.Value) })
+            New-Compose -F $F -G $G -x $newVal
+        }
+    }
+}
 ```
-
 
 ## Either
 
-```js
+```powershell
 class Either {
-  constructor(x) {
-    this.$value = x;
-  }
-
-  // ----- Pointed (Either a)
-  static of(x) {
-    return new Right(x);
-  }
+    [object]$Value
+    Either([object]$x) {
+        $this.Value = $x
+    }
+    static [Either] Of([object]$x) {
+        # By convention, Either.Of creates a Right instance.
+        return [Right]::new($x)
+    }
 }
 ```
 
 #### Left
 
-```js
-class Left extends Either {
-  get isLeft() {
-    return true;
-  }
-
-  get isRight() {
-    return false;
-  }
-
-  static of(x) {
-    throw new Error('`of` called on class Left (value) instead of Either (type)');
-  }
-
-  [util.inspect.custom]() {
-    return `Left(${inspect(this.$value)})`;
-  }
-
-  // ----- Functor (Either a)
-  map() {
-    return this;
-  }
-
-  // ----- Applicative (Either a)
-  ap() {
-    return this;
-  }
-
-  // ----- Monad (Either a)
-  chain() {
-    return this;
-  }
-
-  join() {
-    return this;
-  }
-
-  // ----- Traversable (Either a)
-  sequence(of) {
-    return of(this);
-  }
-
-  traverse(of, fn) {
-    return of(this);
-  }
+```powershell
+class Left : Either {
+    [bool]$IsLeft = $true
+    [bool]$IsRight = $false
+    Left([object]$x) : base($x) { }
+    
+    static [Left] Of([object]$x) {
+        throw "`Of` called on class Left (value) instead of Either (type)"
+    }
+    [string] ToString() {
+        return "Left($($this.Value))"
+    }
+    Left Map([ScriptBlock]$fn) { return $this }
+    Left Ap([object]$other) { return $this }
+    Left Chain([ScriptBlock]$fn) { return $this }
+    Left Join() { return $this }
+    Left Sequence([ScriptBlock]$of) { return & $of $this }
+    Left Traverse([ScriptBlock]$of, [ScriptBlock]$fn) { return & $of $this }
 }
 ```
 
 #### Right
 
-```js
-class Right extends Either {
-  get isLeft() {
-    return false;
-  }
-
-  get isRight() {
-    return true;
-  }
-
-  static of(x) {
-    throw new Error('`of` called on class Right (value) instead of Either (type)');
-  }
-
-  [util.inspect.custom]() {
-    return `Right(${inspect(this.$value)})`;
-  }
-
-  // ----- Functor (Either a)
-  map(fn) {
-    return Either.of(fn(this.$value));
-  }
-
-  // ----- Applicative (Either a)
-  ap(f) {
-    return f.map(this.$value);
-  }
-
-  // ----- Monad (Either a)
-  chain(fn) {
-    return fn(this.$value);
-  }
-
-  join() {
-    return this.$value;
-  }
-
-  // ----- Traversable (Either a)
-  sequence(of) {
-    return this.traverse(of, identity);
-  }
-
-  traverse(of, fn) {
-    return fn(this.$value).map(Either.of);
-  }
+```powershell
+class Right : Either {
+    [bool]$IsLeft = $false
+    [bool]$IsRight = $true
+    Right([object]$x) : base($x) { }
+    
+    static [Right] Of([object]$x) {
+        throw "`Of` called on class Right (value) instead of Either (type)"
+    }
+    [string] ToString() {
+        return "Right($($this.Value))"
+    }
+    [Right] Map([ScriptBlock]$fn) {
+        $result = & $fn $this.Value
+        return [Either]::Of($result)
+    }
+    [Right] Ap([object]$f) {
+        return $f.Map({ $this.Value })
+    }
+    [object] Chain([ScriptBlock]$fn) {
+        return & $fn $this.Value
+    }
+    [object] Join() { return $this.Value }
+    [object] Sequence([ScriptBlock]$of) { return $this.Traverse($of, { param($x) $x }) }
+    [object] Traverse([ScriptBlock]$of, [ScriptBlock]$fn) {
+        $mapped = & $fn $this.Value
+        return $mapped.Map({ [Either]::Of($_) })
+    }
 }
 ```
 
 ## Identity
 
-```js
+```powershell
 class Identity {
-  constructor(x) {
-    this.$value = x;
-  }
-
-  [util.inspect.custom]() {
-    return `Identity(${inspect(this.$value)})`;
-  }
-
-  // ----- Pointed Identity
-  static of(x) {
-    return new Identity(x);
-  }
-
-  // ----- Functor Identity
-  map(fn) {
-    return Identity.of(fn(this.$value));
-  }
-
-  // ----- Applicative Identity
-  ap(f) {
-    return f.map(this.$value);
-  }
-
-  // ----- Monad Identity
-  chain(fn) {
-    return this.map(fn).join();
-  }
-
-  join() {
-    return this.$value;
-  }
-
-  // ----- Traversable Identity
-  sequence(of) {
-    return this.traverse(of, identity);
-  }
-
-  traverse(of, fn) {
-    return fn(this.$value).map(Identity.of);
-  }
+    [object]$Value
+    Identity([object]$x) { $this.Value = $x }
+    
+    static [Identity] Of([object]$x) { return [Identity]::new($x) }
+    
+    [string] ToString() { return "Identity($($this.Value))" }
+    
+    [Identity] Map([ScriptBlock]$fn) {
+        $result = & $fn $this.Value
+        return [Identity]::Of($result)
+    }
+    [object] Ap([Identity]$applyObj) {
+        return $applyObj.Map({ $this.Value })
+    }
+    [object] Chain([ScriptBlock]$fn) {
+        return ($this.Map($fn)).Join()
+    }
+    [object] Join() { return $this.Value }
+    [object] Sequence([ScriptBlock]$of) { return $this.Traverse($of, { param($x) $x }) }
+    [object] Traverse([ScriptBlock]$of, [ScriptBlock]$fn) {
+        $mapped = & $fn $this.Value
+        return $mapped.Map({ [Identity]::Of($_) })
+    }
 }
 ```
 
 ## IO
 
-```js
+```powershell
 class IO {
-  constructor(fn) {
-    this.unsafePerformIO = fn;
-  }
-
-  [util.inspect.custom]() {
-    return 'IO(?)';
-  }
-
-  // ----- Pointed IO
-  static of(x) {
-    return new IO(() => x);
-  }
-
-  // ----- Functor IO
-  map(fn) {
-    return new IO(compose(fn, this.unsafePerformIO));
-  }
-
-  // ----- Applicative IO
-  ap(f) {
-    return this.chain(fn => f.map(fn));
-  }
-
-  // ----- Monad IO
-  chain(fn) {
-    return this.map(fn).join();
-  }
-
-  join() {
-    return new IO(() => this.unsafePerformIO().unsafePerformIO());
-  }
+    [ScriptBlock]$UnsafePerformIO
+    IO([ScriptBlock]$fn) { $this.UnsafePerformIO = $fn }
+    
+    static [IO] Of([object]$x) { return [IO]::new({ return $x }) }
+    
+    [string] ToString() { return "IO(?)" }
+    
+    [IO] Map([ScriptBlock]$fn) {
+        return [IO]::new({
+            $result = & $this.UnsafePerformIO
+            return & $fn $result
+        })
+    }
+    [IO] Ap([IO]$f) {
+        return $this.Chain({ param($fn) $f.Map($fn) })
+    }
+    [IO] Chain([ScriptBlock]$fn) { return $this.Map($fn).Join() }
+    [IO] Join() { return [IO]::new({ & (& $this.UnsafePerformIO).UnsafePerformIO }) }
 }
 ```
 
 ## List
 
-```js
-class List {
-  constructor(xs) {
-    this.$value = xs;
-  }
-
-  [util.inspect.custom]() {
-    return `List(${inspect(this.$value)})`;
-  }
-
-  concat(x) {
-    return new List(this.$value.concat(x));
-  }
-
-  // ----- Pointed List
-  static of(x) {
-    return new List([x]);
-  }
-
-  // ----- Functor List
-  map(fn) {
-    return new List(this.$value.map(fn));
-  }
-
-  // ----- Traversable List
-  sequence(of) {
-    return this.traverse(of, identity);
-  }
-
-  traverse(of, fn) {
-    return this.$value.reduce(
-      (f, a) => fn(a).map(b => bs => bs.concat(b)).ap(f),
-      of(new List([])),
-    );
-  }
+```powershell
+class ListStructure {
+    [object[]]$Values
+    ListStructure([object[]]$xs) { $this.Values = $xs }
+    
+    static [ListStructure] Of([object]$x) { return [ListStructure]::new(@($x)) }
+    
+    [string] ToString() { return "List(" + ($this.Values -join ", ") + ")" }
+    
+    [ListStructure] Concat([ListStructure]$other) {
+        return [ListStructure]::new($this.Values + $other.Values)
+    }
+    [ListStructure] Map([ScriptBlock]$fn) {
+        $mapped = $this.Values | ForEach-Object { & $fn $_ }
+        return [ListStructure]::new($mapped)
+    }
+    [ListStructure] Sequence([ScriptBlock]$of) { return $this.Traverse($of, { param($x) $x }) }
+    [ListStructure] Traverse([ScriptBlock]$of, [ScriptBlock]$fn) {
+        $result = @()
+        foreach ($a in $this.Values) {
+            $result += (& $fn $a)
+        }
+        return [ListStructure]::new($result)
+    }
 }
 ```
 
+## Map Structure
 
-## Map
-
-```js
-class Map {
-  constructor(x) {
-    this.$value = x;
-  }
-
-  [util.inspect.custom]() {
-    return `Map(${inspect(this.$value)})`;
-  }
-
-  insert(k, v) {
-    const singleton = {};
-    singleton[k] = v;
-    return Map.of(Object.assign({}, this.$value, singleton));
-  }
-
-  reduceWithKeys(fn, zero) {
-    return Object.keys(this.$value)
-      .reduce((acc, k) => fn(acc, this.$value[k], k), zero);
-  }
-
-  // ----- Functor (Map a)
-  map(fn) {
-    return this.reduceWithKeys(
-      (m, v, k) => m.insert(k, fn(v)),
-      new Map({}),
-    );
-  }
-
-  // ----- Traversable (Map a)
-  sequence(of) {
-    return this.traverse(of, identity);
-  }
-
-  traverse(of, fn) {
-    return this.reduceWithKeys(
-      (f, a, k) => fn(a).map(b => m => m.insert(k, b)).ap(f),
-      of(new Map({})),
-    );
-  }
+```powershell
+class MapStructure {
+    [hashtable]$Value
+    MapStructure([hashtable]$x) { $this.Value = $x }
+    
+    static [MapStructure] Of([hashtable]$x) { return [MapStructure]::new($x) }
+    
+    [string] ToString() {
+        $entries = foreach ($key in $this.Value.Keys) { "$key: $($this.Value[$key])" }
+        return "Map(" + ($entries -join ", ") + ")"
+    }
+    MapStructure Insert([string]$k, $v) {
+        $newHash = $this.Value.Clone()
+        $newHash[$k] = $v
+        return [MapStructure]::Of($newHash)
+    }
+    [MapStructure] Map([ScriptBlock]$fn) {
+        $newHash = @{}
+        foreach ($key in $this.Value.Keys) {
+            $newHash[$key] = & $fn $this.Value[$key]
+        }
+        return [MapStructure]::Of($newHash)
+    }
+    [MapStructure] Sequence([ScriptBlock]$of) { return $this.Traverse($of, { param($x) $x }) }
+    [MapStructure] Traverse([ScriptBlock]$of, [ScriptBlock]$fn) {
+        $result = @{}
+        foreach ($key in $this.Value.Keys) {
+            $result[$key] = & $fn $this.Value[$key]
+        }
+        return [MapStructure]::Of($result)
+    }
 }
 ```
-
 
 ## Maybe
 
-> Note that `Maybe` could also be defined in a similar fashion as we did for `Either` with two 
-> child classes `Just` and `Nothing`. This is simply a different flavor.
-
-```js
+```powershell
 class Maybe {
-  get isNothing() {
-    return this.$value === null || this.$value === undefined;
-  }
-
-  get isJust() {
-    return !this.isNothing;
-  }
-
-  constructor(x) {
-    this.$value = x;
-  }
-
-  [util.inspect.custom]() {
-    return this.isNothing ? 'Nothing' : `Just(${inspect(this.$value)})`;
-  }
-
-  // ----- Pointed Maybe
-  static of(x) {
-    return new Maybe(x);
-  }
-
-  // ----- Functor Maybe
-  map(fn) {
-    return this.isNothing ? this : Maybe.of(fn(this.$value));
-  }
-
-  // ----- Applicative Maybe
-  ap(f) {
-    return this.isNothing ? this : f.map(this.$value);
-  }
-
-  // ----- Monad Maybe
-  chain(fn) {
-    return this.map(fn).join();
-  }
-
-  join() {
-    return this.isNothing ? this : this.$value;
-  }
-
-  // ----- Traversable Maybe
-  sequence(of) {
-    return this.traverse(of, identity);
-  }
-
-  traverse(of, fn) {
-    return this.isNothing ? of(this) : fn(this.$value).map(Maybe.of);
-  }
+    [object]$Value
+    Maybe([object]$x) { $this.Value = $x }
+    
+    [bool] get_IsNothing() {
+        return ($this.Value -eq $null)
+    }
+    [bool] get_IsJust() { return -not $this.IsNothing }
+    
+    static [Maybe] Of([object]$x) { return [Maybe]::new($x) }
+    
+    [string] ToString() {
+        if ($this.IsNothing) { return "Nothing" }
+        else { return "Just($($this.Value))" }
+    }
+    [Maybe] Map([ScriptBlock]$fn) {
+        if ($this.IsNothing) { return $this }
+        else { return [Maybe]::Of(& $fn $this.Value) }
+    }
+    [Maybe] Ap([Maybe]$other) {
+        if ($this.IsNothing) { return $this }
+        else { return $other.Map({ $this.Value }) }
+    }
+    [Maybe] Chain([ScriptBlock]$fn) { return ($this.Map($fn)).Join() }
+    [object] Join() { if ($this.IsNothing) { return $this } else { return $this.Value } }
+    [Maybe] Sequence([ScriptBlock]$of) { return $this.Traverse($of, { param($x) $x }) }
+    [Maybe] Traverse([ScriptBlock]$of, [ScriptBlock]$fn) {
+        if ($this.IsNothing) { return & $of $this }
+        else { 
+            $result = & $fn $this.Value
+            return $result.Map({ [Maybe]::Of($_) })
+        }
+    }
 }
 ```
 
 ## Task
 
-```js
+```powershell
 class Task {
-  constructor(fork) {
-    this.fork = fork;
-  }
-
-  [util.inspect.custom]() {
-    return 'Task(?)';
-  }
-
-  static rejected(x) {
-    return new Task((reject, _) => reject(x));
-  }
-
-  // ----- Pointed (Task a)
-  static of(x) {
-    return new Task((_, resolve) => resolve(x));
-  }
-
-  // ----- Functor (Task a)
-  map(fn) {
-    return new Task((reject, resolve) => this.fork(reject, compose(resolve, fn)));
-  }
-
-  // ----- Applicative (Task a)
-  ap(f) {
-    return this.chain(fn => f.map(fn));
-  }
-
-  // ----- Monad (Task a)
-  chain(fn) {
-    return new Task((reject, resolve) => this.fork(reject, x => fn(x).fork(reject, resolve)));
-  }
-
-  join() {
-    return this.chain(identity);
-  }
+    [ScriptBlock]$Fork
+    Task([ScriptBlock]$fork) { $this.Fork = $fork }
+    
+    static [Task] Rejected([object]$x) {
+        return [Task]::new({ param($reject, $resolve) $reject $x })
+    }
+    static [Task] Of([object]$x) {
+        return [Task]::new({ param($reject, $resolve) $resolve $x })
+    }
+    [string] ToString() { return "Task(?)" }
+    [Task] Map([ScriptBlock]$fn) {
+        return [Task]::new({
+            param($reject, $resolve)
+            & $this.Fork $reject ([ScriptBlock]::Create("param(`$x) & $fn `$x"))
+        })
+    }
+    [Task] Ap([Task]$f) { return $this.Chain({ param($fn) $f.Map($fn) }) }
+    [Task] Chain([ScriptBlock]$fn) {
+        return [Task]::new({
+            param($reject, $resolve)
+            & $this.Fork $reject { param($x) & (& $fn $x).Fork $reject $resolve }
+        })
+    }
+    [Task] Join() { return $this.Chain({ param($x) $x }) }
 }
 ```

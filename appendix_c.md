@@ -1,227 +1,319 @@
-# Appendix C: Pointfree Utilities
+# Appendix C: Pointfree Utilities (PowerShell Version)
 
-In this appendix, you'll find pointfree versions of rather classic JavaScript functions
-described in the book. All of the following functions are seemingly available in exercises, as
-part of the global context. Keep in mind that these implementations may not be the fastest or
-the most efficient implementation out there; they *solely serve an educational purpose*.
+In this appendix, you'll find pointfree versions of some classic functions described in the book.  
+All of the following functions are available in the global context. Keep in mind that these implementations  
+may not be the fastest or the most efficient; they *solely serve an educational purpose*.
 
-In order to find functions that are more production-ready, have a peek at
-[ramda](https://ramdajs.com/), [lodash](https://lodash.com/), or [folktale](http://folktale.origamitower.com/).
+Note that these functions refer to the Curry and Compose functions defined in [Appendix A](./appendix_a.md).
 
-Note that functions refer to the `curry` & `compose` functions defined in [Appendix A](./appendix_a.md)
+## add
 
-## add 
-
-```js
-// add :: Number -> Number -> Number
-const add = curry((a, b) => a + b);
+```powershell
+# add :: Number -> Number -> Number
+$add = Curry({
+    param($a, $b)
+    $a + $b
+})
 ```
 
 ## append
 
-```js
-// append :: String -> String -> String
-const append = flip(concat);
+```powershell
+# append :: String -> String -> String
+# Defined as the flipped concat.
+$append = $flip $concat
 ```
 
 ## chain
 
-```js
-// chain :: Monad m => (a -> m b) -> m a -> m b
-const chain = curry((fn, m) => m.chain(fn));
+```powershell
+# chain :: Monad m => (a -> m b) -> m a -> m b
+$chain = Curry({
+    param($fn, $m)
+    $m.chain($fn)
+})
 ```
 
 ## concat
 
-```js
-// concat :: String -> String -> String
-const concat = curry((a, b) => a.concat(b));
+```powershell
+# concat :: String -> String -> String
+$concat = Curry({
+    param($a, $b)
+    $a + $b
+})
 ```
 
 ## eq
 
-```js
-// eq :: Eq a => a -> a -> Boolean
-const eq = curry((a, b) => a === b);
+```powershell
+# eq :: Eq a => a -> a -> Boolean
+$eq = Curry({
+    param($a, $b)
+    $a -eq $b
+})
 ```
 
 ## filter
 
-```js
-// filter :: (a -> Boolean) -> [a] -> [a]
-const filter = curry((fn, xs) => xs.filter(fn));
+```powershell
+# filter :: (a -> Boolean) -> [a] -> [a]
+$filter = Curry({
+    param($fn, $xs)
+    $xs | Where-Object { & $fn $_ }
+})
 ```
 
 ## flip
 
-```js
-// flip :: (a -> b -> c) -> b -> a -> c
-const flip = curry((fn, a, b) => fn(b, a));
+```powershell
+# flip :: (a -> b -> c) -> b -> a -> c
+$flip = Curry({
+    param($fn, $a, $b)
+    & $fn $b $a
+})
 ```
 
-## forEach 
+## forEach
 
-```js
-// forEach :: (a -> ()) -> [a] -> ()
-const forEach = curry((fn, xs) => xs.forEach(fn));
+```powershell
+# forEach :: (a -> ()) -> [a] -> ()
+$forEach = Curry({
+    param($fn, $xs)
+    $xs | ForEach-Object { & $fn $_ }
+})
 ```
 
 ## head
 
-```js
-// head :: [a] -> a
-const head = xs => xs[0];
+```powershell
+# head :: [a] -> a
+$head = {
+    param($xs)
+    $xs[0]
+}
 ```
 
 ## intercalate
 
-```js
-// intercalate :: String -> [String] -> String
-const intercalate = curry((str, xs) => xs.join(str));
+```powershell
+# intercalate :: String -> [String] -> String
+$intercalate = Curry({
+    param($sep, $xs)
+    $xs -join $sep
+})
 ```
 
 ## join
 
-```js
-// join :: Monad m => m (m a) -> m a
-const join = m => m.join();
+```powershell
+# join :: Monad m => m (m a) -> m a
+$join = {
+    param($m)
+    $m.join()
+}
 ```
 
 ## last
 
-```js
-// last :: [a] -> a
-const last = xs => xs[xs.length - 1];
+```powershell
+# last :: [a] -> a
+$last = {
+    param($xs)
+    $xs[$xs.Count - 1]
+}
 ```
 
 ## map
 
-```js
-// map :: Functor f => (a -> b) -> f a -> f b
-const map = curry((fn, f) => f.map(fn));
+```powershell
+# map :: Functor f => (a -> b) -> f a -> f b
+$map = Curry({
+    param($fn, $f)
+    $f | ForEach-Object { & $fn $_ }
+})
 ```
 
 ## match
 
-```js
-// match :: RegExp -> String -> Boolean
-const match = curry((re, str) => re.test(str));
+```powershell
+# match :: RegExp -> String -> Boolean
+$match = Curry({
+    param($re, $str)
+    $str -match $re
+})
 ```
 
-## prop 
+## prop
 
-```js
-// prop :: String -> Object -> a
-const prop = curry((p, obj) => obj[p]);
+```powershell
+# prop :: String -> Object -> a
+$prop = Curry({
+    param($p, $obj)
+    # Assumes $obj is a hashtable or PSObject with a property $p.
+    $obj[$p]
+})
 ```
 
 ## reduce
 
-```js
-// reduce :: (b -> a -> b) -> b -> [a] -> b
-const reduce = curry((fn, zero, xs) => xs.reduce(fn, zero));
+```powershell
+# reduce :: (b -> a -> b) -> b -> [a] -> b
+$reduce = Curry({
+    param($fn, $zero, $xs)
+    $acc = $zero
+    foreach ($x in $xs) {
+        $acc = & $fn $acc $x
+    }
+    $acc
+})
 ```
 
 ## replace
 
-```js
-// replace :: RegExp -> String -> String -> String
-const replace = curry((re, rpl, str) => str.replace(re, rpl));
+```powershell
+# replace :: RegExp -> String -> String -> String
+$replace = Curry({
+    param($pattern, $rpl, $str)
+    $str -replace $pattern, $rpl
+})
 ```
 
 ## reverse
 
-```js
-// reverse :: [a] -> [a]
-const reverse = x => (Array.isArray(x) ? x.reverse() : x.split('').reverse().join(''));
+```powershell
+# reverse :: [a] -> [a]
+$reverse = {
+    param($x)
+    if ($x -is [array]) {
+        $copy = @($x)
+        [Array]::Reverse($copy)
+        $copy
+    }
+    else {
+        $arr = [char[]]$x
+        [Array]::Reverse($arr)
+        -join $arr
+    }
+}
 ```
 
 ## safeHead
 
-```js
-// safeHead :: [a] -> Maybe a
-const safeHead = compose(Maybe.of, head);
+```powershell
+# safeHead :: [a] -> Maybe a
+$safeHead = {
+    param($xs)
+    & Compose -Functions @({ Maybe.Of }, $head) $xs
+}
 ```
 
 ## safeLast
 
-```js
-// safeLast :: [a] -> Maybe a
-const safeLast = compose(Maybe.of, last);
+```powershell
+# safeLast :: [a] -> Maybe a
+$safeLast = {
+    param($xs)
+    & Compose -Functions @({ Maybe.Of }, $last) $xs
+}
 ```
 
 ## safeProp
 
-```js
-// safeProp :: String -> Object -> Maybe a
-const safeProp = curry((p, obj) => compose(Maybe.of, prop(p))(obj));
+```powershell
+# safeProp :: String -> Object -> Maybe a
+$safeProp = Curry({
+    param($p, $obj)
+    (& Compose -Functions @({ Maybe.Of }, { param($o) & $prop $p $o })) $obj
+})
 ```
 
 ## sequence
 
-```js
-// sequence :: (Applicative f, Traversable t) => (a -> f a) -> t (f a) -> f (t a)
-const sequence = curry((of, f) => f.sequence(of));
+```powershell
+# sequence :: (Applicative f, Traversable t) => (a -> f a) -> t (f a) -> f (t a)
+$sequence = Curry({
+    param($of, $f)
+    & $f.sequence($of)
+})
 ```
 
 ## sortBy
 
-```js
-// sortBy :: Ord b => (a -> b) -> [a] -> [a]
-const sortBy = curry((fn, xs) => xs.sort((a, b) => {
-  if (fn(a) === fn(b)) {
-    return 0;
-  }
-
-  return fn(a) > fn(b) ? 1 : -1;
-}));
+```powershell
+# sortBy :: Ord b => (a -> b) -> [a] -> [a]
+$sortBy = Curry({
+    param($fn, $xs)
+    $xs | Sort-Object -Property { & $fn $_ }
+})
 ```
 
 ## split
 
-```js
-// split :: String -> String -> [String]
-const split = curry((sep, str) => str.split(sep));
+```powershell
+# split :: String -> String -> [String]
+$split = Curry({
+    param($sep, $str)
+    $str -split $sep
+})
 ```
 
 ## take
 
-```js
-// take :: Number -> [a] -> [a]
-const take = curry((n, xs) => xs.slice(0, n));
+```powershell
+# take :: Number -> [a] -> [a]
+$take = Curry({
+    param($n, $xs)
+    $xs[0..($n - 1)]
+})
 ```
 
 ## toLowerCase
 
-```js
-// toLowerCase :: String -> String
-const toLowerCase = s => s.toLowerCase();
+```powershell
+# toLowerCase :: String -> String
+$toLowerCase = {
+    param($s)
+    $s.ToLower()
+}
 ```
 
 ## toString
 
-```js
-// toString :: a -> String
-const toString = String;
+```powershell
+# toString :: a -> String
+$toString = {
+    param($x)
+    [string]$x
+}
 ```
 
 ## toUpperCase
 
-```js
-// toUpperCase :: String -> String
-const toUpperCase = s => s.toUpperCase();
+```powershell
+# toUpperCase :: String -> String
+$toUpperCase = {
+    param($s)
+    $s.ToUpper()
+}
 ```
 
 ## traverse
 
-```js
-// traverse :: (Applicative f, Traversable t) => (a -> f a) -> (a -> f b) -> t a -> f (t b)
-const traverse = curry((of, fn, f) => f.traverse(of, fn));
+```powershell
+# traverse :: (Applicative f, Traversable t) => (a -> f a) -> (a -> f b) -> t a -> f (t b)
+$traverse = Curry({
+    param($of, $fn, $f)
+    & $f.traverse($of, $fn)
+})
 ```
 
 ## unsafePerformIO
 
-```js
-// unsafePerformIO :: IO a -> a
-const unsafePerformIO = io => io.unsafePerformIO();
+```powershell
+# unsafePerformIO :: IO a -> a
+$unsafePerformIO = {
+    param($io)
+    & $io.unsafePerformIO()
+}
 ```

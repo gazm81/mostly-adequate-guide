@@ -1,154 +1,201 @@
-# Appendix A: Essential Functions Support
+# Appendix A: Essential Functions Support (PowerShell Version)
 
-In this appendix, you'll find some basic JavaScript implementations of various functions
-described in the book. Keep in mind that these implementations may not be the fastest or the
-most efficient implementation out there; they *solely serve an educational purpose*.
+In this appendix, you'll find some basic PowerShell implementations of various functions described in the book.
+Keep in mind that these implementations serve an educational purpose only.
 
-In order to find functions that are more production-ready, have a peek at
-[ramda](https://ramdajs.com/), [lodash](https://lodash.com/), or [folktale](http://folktale.origamitower.com/).
-
-Note that some functions also refer to algebraic structures defined in the [Appendix B](./appendix_b.md)
+Some concepts (such as currying and applicative functors) are not native to PowerShell, so these examples are minimal emulations.
 
 ## always
 
-```js
-// always :: a -> b -> a
-const always = curry((a, b) => a);
-```
-
-
-## compose
-
-```js
-// compose :: ((y -> z), (x -> y),  ..., (a -> b)) -> a -> z
-const compose = (...fns) => (...args) => fns.reduceRight((res, fn) => [fn.call(null, ...res)], args)[0];
-```
-
-
-## curry
-
-```js
-// curry :: ((a, b, ...) -> c) -> a -> b -> ... -> c
-function curry(fn) {
-  const arity = fn.length;
-
-  return function $curry(...args) {
-    if (args.length < arity) {
-      return $curry.bind(null, ...args);
-    }
-
-    return fn.call(null, ...args);
-  };
+```powershell
+function Always {
+    param($a, $b)
+    return $a
 }
 ```
 
+## compose
+
+```powershell
+function Compose {
+    param(
+        [ScriptBlock[]]$Functions
+    )
+    return {
+        param($args)
+        $result = $args
+        for ($i = $Functions.Count - 1; $i -ge 0; $i--) {
+            $result = @(& $Functions[$i] @result)
+        }
+        return $result[0]
+    }
+}
+```
+
+## curry
+
+```powershell
+# Note: Currying is not a native concept in PowerShell.
+# This is a minimal emulation that creates a closure for partial application.
+function Curry {
+    param(
+        [ScriptBlock]$Function,
+        [int]$Arity = $Function.Parameters.Count
+    )
+    
+    function Inner {
+        param(
+            [object[]]$Args
+        )
+        if ($Args.Count -lt $Arity) {
+            return { param($MoreArgs) 
+                & (Inner @($Args + $MoreArgs))
+            }
+        }
+        else {
+            return & $Function @Args
+        }
+    }
+    return Inner @()
+}
+```
 
 ## either
 
-```js
-// either :: (a -> c) -> (b -> c) -> Either a b -> c
-const either = curry((f, g, e) => {
-  if (e.isLeft) {
-    return f(e.$value);
-  }
-
-  return g(e.$value);
-});
+```powershell
+function Either {
+    param(
+        [ScriptBlock]$F,
+        [ScriptBlock]$G,
+        $e
+    )
+    if ($e.isLeft) {
+        return & $F $e.value
+    }
+    else {
+        return & $G $e.value
+    }
+}
 ```
-
 
 ## identity
 
-```js
-// identity :: x -> x
-const identity = x => x;
+```powershell
+function Identity {
+    param($x)
+    return $x
+}
 ```
-
 
 ## inspect
 
-```js
-// inspect :: a -> String
-const inspect = (x) => {
-  if (x && typeof x.inspect === 'function') {
-    return x.inspect();
-  }
-
-  function inspectFn(f) {
-    return f.name ? f.name : f.toString();
-  }
-
-  function inspectTerm(t) {
-    switch (typeof t) {
-      case 'string':
-        return `'${t}'`;
-      case 'object': {
-        const ts = Object.keys(t).map(k => [k, inspect(t[k])]);
-        return `{${ts.map(kv => kv.join(': ')).join(', ')}}`;
-      }
-      default:
-        return String(t);
+```powershell
+function Inspect {
+    param($x)
+    if ($x -is [ScriptBlock]) {
+        return $x.ToString()
     }
-  }
-
-  function inspectArgs(args) {
-    return Array.isArray(args) ? `[${args.map(inspect).join(', ')}]` : inspectTerm(args);
-  }
-
-  return (typeof x === 'function') ? inspectFn(x) : inspectArgs(x);
-};
+    elseif ($x -is [string]) {
+        return "'$x'"
+    }
+    elseif ($x -is [object]) {
+        $props = $x.PSObject.Properties | ForEach-Object { "$($_.Name): $(Inspect $_.Value)" }
+        return "{" + ($props -join ', ') + "}"
+    }
+    else {
+        return [string]$x
+    }
+}
 ```
-
 
 ## left
 
-```js
-// left :: a -> Either a b
-const left = a => new Left(a);
-```
+```powershell
+class Left {
+    [bool]$isLeft = $true
+    [object]$value
+    Left($value) {
+        $this.value = $value
+    }
+}
 
+function Left {
+    param($a)
+    return [Left]::new($a)
+}
+```
 
 ## liftA2
 
-```js
-// liftA2 :: (Applicative f) => (a1 -> a2 -> b) -> f a1 -> f a2 -> f b
-const liftA2 = curry((fn, a1, a2) => a1.map(fn).ap(a2));
+```powershell
+# Note: This is only a simulation. In a functional language,
+# liftA2 applies a function in a context (Applicative Functor).
+# Here we assume $a1 and $a2 have Map and Ap methods defined.
+function LiftA2 {
+    param(
+        [ScriptBlock]$Fn,
+        $a1,
+        $a2
+    )
+    return $a1.Map($Fn).Ap($a2)
+}
 ```
-
 
 ## liftA3
 
-```js
-// liftA3 :: (Applicative f) => (a1 -> a2 -> a3 -> b) -> f a1 -> f a2 -> f a3 -> f b
-const liftA3 = curry((fn, a1, a2, a3) => a1.map(fn).ap(a2).ap(a3));
+```powershell
+# Similar simulation as liftA2.
+function LiftA3 {
+    param(
+        [ScriptBlock]$Fn,
+        $a1,
+        $a2,
+        $a3
+    )
+    return $a1.Map($Fn).Ap($a2).Ap($a3)
+}
 ```
-
 
 ## maybe
 
-```js
-// maybe :: b -> (a -> b) -> Maybe a -> b
-const maybe = curry((v, f, m) => {
-  if (m.isNothing) {
-    return v;
-  }
-
-  return f(m.$value);
-});
+```powershell
+function Maybe {
+    param(
+        $Default,
+        [ScriptBlock]$Func,
+        $m
+    )
+    if ($m.isNothing) {
+        return $Default
+    }
+    else {
+        return & $Func $m.value
+    }
+}
 ```
-
 
 ## nothing
 
-```js
-// nothing :: Maybe a
-const nothing = Maybe.of(null);
+```powershell
+class Nothing {
+    [bool]$isNothing = $true
+    [object]$value = $null
+}
+
+function Nothing {
+    return [Nothing]::new()
+}
 ```
 
+## reject
 
-## reject 
-
-```js
-// reject :: a -> Task a b
-const reject = a => Task.rejected(a);
+```powershell
+# In this simulation, Reject throws an error to represent a rejected Task.
+function Reject {
+    param($a)
+    throw $a
+}
 ```
+
+*Additional functions by Christopher Kuech may be appended here to extend functionality as needed.*
+````
